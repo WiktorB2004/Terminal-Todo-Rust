@@ -1,61 +1,145 @@
 use ncurses::*;
-use std::env;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Write};
+use std::ops::{Add, Mul};
 use std::process;
+use std::{cmp, env};
 
 const REGULAR_PAIR: i16 = 0;
 const HIGHLIGHT_PAIR: i16 = 1;
 
-type Id = i32;
-
-#[derive(Default)]
-struct UI {
-    list_curr: Option<Id>,
+#[derive(Default, Copy, Clone)]
+struct Vec2 {
     row: i32,
     col: i32,
 }
 
-impl UI {
-    fn begin(&mut self, row: i32, col: i32) {
-        self.row = row;
-        self.col = col;
+impl Vec2 {
+    fn new(row: i32, col: i32) -> Self {
+        Self { row, col }
+    }
+}
+
+impl Add for Vec2 {
+    type Output = Vec2;
+
+    fn add(self, rhs: Vec2) -> Vec2 {
+        Vec2 {
+            row: self.row + rhs.row,
+            col: self.col + rhs.col,
+        }
+    }
+}
+
+impl Mul for Vec2 {
+    type Output = Vec2;
+
+    fn mul(self, rhs: Vec2) -> Vec2 {
+        Vec2 {
+            row: self.row * rhs.row,
+            col: self.col * rhs.col,
+        }
+    }
+}
+
+enum ContType {
+    Vert,
+    Horz,
+}
+
+struct Cont {
+    kind: ContType,
+    pos: Vec2,
+    size: Vec2,
+}
+
+impl Cont {
+    fn available_pos(&self) -> Vec2 {
+        use ContType::*;
+        match self.kind {
+            Horz => self.pos + self.size * Vec2::new(1, 0),
+            Vert => self.pos + self.size * Vec2::new(0, 1),
+        }
     }
 
-    fn begin_list(&mut self, id: Id) {
-        assert!(self.list_curr.is_none(), "Nested lists are not allowed");
-        self.list_curr = Some(id);
+    fn add_widget(&mut self, size: Vec2) {
+        use ContType::*;
+
+        match self.kind {
+            Horz => {
+                self.size.row += size.row;
+                self.size.col = cmp::max(self.size.col, size.col);
+            }
+            Vert => {
+                self.size.row = cmp::max(self.size.row, size.row);
+                self.size.col += size.col;
+            }
+        }
+    }
+}
+
+#[derive(Default)]
+struct UI {
+    containers: Vec<Cont>,
+}
+
+impl UI {
+    fn begin(&mut self, pos: Vec2, kind: ContType) {
+        assert!(self.containers.is_empty());
+        self.containers.push(Cont {
+            kind,
+            pos,
+            size: Vec2::new(0, 0),
+        })
+    }
+
+    fn begin_container(&mut self, kind: ContType) {
+        let layout = self
+            .containers
+            .last()
+            .expect("Cant create container outside of UI::begin() and UI::end()");
+        let pos = layout.available_pos();
+        self.containers.push(Cont {
+            kind,
+            pos,
+            size: Vec2::new(0, 0),
+        })
+    }
+
+    fn end_container(&mut self) {
+        let layout = self
+            .containers
+            .pop()
+            .expect("Unbalanced UI::begin_layout and UI:end_layout calls");
+
+        self.containers
+            .last_mut()
+            .expect("Unbalanced UI::begin_layout and UI:end_layout calls")
+            .add_widget(layout.size)
     }
 
     fn label(&mut self, text: &str, pair: i16) {
-        mv(self.row as i32, self.col as i32);
+        let layout = self
+            .containers
+            .last_mut()
+            .expect("Trying to render label outside existing layout");
+
+        let pos = layout.available_pos();
+
+        mv(pos.col as i32, pos.row as i32);
         attron(COLOR_PAIR(pair));
         addstr(text);
         attroff(COLOR_PAIR(pair));
-        self.row += 1;
+        layout.add_widget(Vec2::new(text.len() as i32, 1));
     }
 
-    fn list_element(&mut self, label: &str, id: Id) {
-        let id_curr = self
-            .list_curr
-            .expect("Not allowed to create list elements outside of lists");
-
-        self.label(label, {
-            if id_curr == id {
-                HIGHLIGHT_PAIR
-            } else {
-                REGULAR_PAIR
-            }
-        });
+    fn end(&mut self) {
+        self.containers
+            .pop()
+            .expect("Unbalanced UI::begin and UI:end calls");
     }
-
-    fn end_list(&mut self) {
-        self.list_curr = None;
-    }
-
-    fn end(&mut self) {}
 }
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum Focus {
     Todo,
     Done,
@@ -163,26 +247,41 @@ fn main() {
 
     while !quit {
         erase();
-        ui.begin(0, 0);
-        match focus {
-            Focus::Todo => {
-                ui.begin_list(todo_curr);
-                ui.label("[TODO] DONE", REGULAR_PAIR);
+        ui.begin(Vec2::new(0, 0), ContType::Horz);
+        {
+            ui.begin_container(ContType::Vert);
+            {
+                ui.label("TODO", REGULAR_PAIR);
                 ui.label("-------------", REGULAR_PAIR);
-                for (index, todo) in todos.iter().enumerate() {
-                    ui.list_element(&format!("- [ ] {}", todo), index as i32);
+                for (index, item) in todos.iter().enumerate() {
+                    ui.label(
+                        &format!("- [ ] {}", item),
+                        if index == todo_curr as usize && focus == Focus::Todo {
+                            HIGHLIGHT_PAIR
+                        } else {
+                            REGULAR_PAIR
+                        },
+                    );
                 }
-                ui.end_list();
             }
-            Focus::Done => {
-                ui.label("TODO [DONE]", REGULAR_PAIR);
+            ui.end_container();
+
+            ui.begin_container(ContType::Vert);
+            {
+                ui.label("DONE", REGULAR_PAIR);
                 ui.label("-------------", REGULAR_PAIR);
-                ui.begin_list(done_curr);
-                for (index, done) in done.iter().enumerate() {
-                    ui.list_element(&format!("- [x] {}", done), index as i32)
+                for (index, item) in done.iter().enumerate() {
+                    ui.label(
+                        &format!("- [x] {}", item),
+                        if index == done_curr as usize && focus == Focus::Done {
+                            HIGHLIGHT_PAIR
+                        } else {
+                            REGULAR_PAIR
+                        },
+                    )
                 }
-                ui.end_list();
             }
+            ui.end_container();
         }
 
         ui.end();
