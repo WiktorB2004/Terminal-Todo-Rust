@@ -133,6 +133,7 @@ impl UI {
         layout.add_widget(Vec2::new(width, 1));
     }
 
+    #[allow(dead_code)]
     fn label(&mut self, text: &str, pair: i16) {
         self.label_fixed_width(text, pair, text.len() as i32)
     }
@@ -249,6 +250,8 @@ fn main() {
 
     initscr();
     noecho();
+    keypad(stdscr(), true);
+    timeout(16);
     curs_set(CURSOR_VISIBILITY::CURSOR_INVISIBLE);
 
     start_color();
@@ -258,86 +261,128 @@ fn main() {
     refresh();
     let mut quit = false;
     let mut focus = Focus::Todo;
+    let mut notification = String::new();
     let mut editing = false;
+    let mut editing_cursor = 0;
 
     let mut ui = UI::default();
+    let mut key_curr = None;
 
     while !quit {
+        if let Some('q') = key_curr.map(|x| x as u8 as char) {
+            quit = true;
+            key_curr = None;
+        }
         erase();
 
         let mut x = 0;
         let mut y = 0;
         getmaxyx(stdscr(), &mut y, &mut x);
 
-        ui.begin(Vec2::new(0, 0), ContType::Horz);
+        ui.begin(Vec2::new(0, 0), ContType::Vert);
         {
-            ui.begin_container(ContType::Vert);
-            {
-                ui.label_fixed_width("TODO", REGULAR_PAIR, x / 2);
-                ui.label("-------------", REGULAR_PAIR);
-                for (index, item) in todos.iter().enumerate() {
-                    ui.label_fixed_width(
-                        &format!("- [ ] {}", item),
-                        if index == todo_curr as usize && focus == Focus::Todo {
-                            HIGHLIGHT_PAIR
-                        } else {
-                            REGULAR_PAIR
-                        },
-                        x / 2,
-                    );
-                }
-            }
-            ui.end_container();
+            ui.label_fixed_width(&notification, REGULAR_PAIR, x);
+            ui.label_fixed_width(" ", REGULAR_PAIR, x);
 
-            ui.begin_container(ContType::Vert);
+            ui.begin_container(ContType::Horz);
             {
-                ui.label_fixed_width("DONE", REGULAR_PAIR, x / 2);
-                ui.label("-------------", REGULAR_PAIR);
-                for (index, item) in done.iter().enumerate() {
-                    ui.label_fixed_width(
-                        &format!("- [x] {}", item),
-                        if index == done_curr as usize && focus == Focus::Done {
-                            HIGHLIGHT_PAIR
-                        } else {
-                            REGULAR_PAIR
-                        },
-                        x / 2,
-                    )
+                ui.begin_container(ContType::Vert);
+                {
+                    if focus == Focus::Todo {
+                        ui.label_fixed_width("TODO", HIGHLIGHT_PAIR, x / 2);
+                        for (index, item) in todos.iter().enumerate() {
+                            if index == todo_curr as usize {
+                                if editing {
+                                    todo!()
+                                } else {
+                                    ui.label_fixed_width(
+                                        &format!("- [ ] {}", item),
+                                        HIGHLIGHT_PAIR,
+                                        x / 2,
+                                    );
+                                }
+                            } else {
+                                ui.label_fixed_width(
+                                    &format!("- [ ] {}", item),
+                                    REGULAR_PAIR,
+                                    x / 2,
+                                );
+                            }
+                        }
+                        if !editing {
+                            if let Some(key) = key_curr {
+                                match key as u8 as char {
+                                    'W' => list_drag_up(&mut todos, &mut todo_curr),
+                                    'w' => list_up(&todos, &mut todo_curr),
+                                    'S' => list_drag_down(&mut todos, &mut todo_curr),
+                                    's' => list_down(&todos, &mut todo_curr),
+                                    'e' => editing = true,
+                                    '\n' => list_transfer(&mut done, &mut todos, &mut todo_curr),
+                                    '\t' => {
+                                        focus = focus.toggle();
+                                    }
+                                    _ => {}
+                                }
+                                key_curr = None;
+                            }
+                        }
+                    } else {
+                        ui.label_fixed_width("TODO", REGULAR_PAIR, x / 2);
+                        for item in todos.iter() {
+                            ui.label_fixed_width(&format!("- [ ] {}", item), REGULAR_PAIR, x / 2)
+                        }
+                    }
                 }
+                ui.end_container();
+
+                ui.begin_container(ContType::Vert);
+                {
+                    if focus == Focus::Done {
+                        ui.label_fixed_width("DONE", HIGHLIGHT_PAIR, x / 2);
+                        for (index, item) in done.iter().enumerate() {
+                            ui.label_fixed_width(
+                                &format!("- [x] {}", item),
+                                if index == done_curr as usize {
+                                    HIGHLIGHT_PAIR
+                                } else {
+                                    REGULAR_PAIR
+                                },
+                                x / 2,
+                            );
+                        }
+                        if let Some(key) = key_curr {
+                            match key as u8 as char {
+                                'W' => list_drag_up(&mut done, &mut done_curr),
+                                'w' => list_up(&done, &mut done_curr),
+                                'S' => list_drag_down(&mut done, &mut done_curr),
+                                's' => list_down(&done, &mut done_curr),
+                                '\n' => list_transfer(&mut todos, &mut done, &mut done_curr),
+                                '\t' => {
+                                    focus = focus.toggle();
+                                }
+                                _ => {}
+                            }
+                            key_curr = None;
+                        }
+                    } else {
+                        ui.label_fixed_width("DONE", REGULAR_PAIR, x / 2);
+                        for item in done.iter() {
+                            ui.label_fixed_width(&format!("- [x] {}", item), REGULAR_PAIR, x / 2)
+                        }
+                    }
+                }
+                ui.end_container();
             }
             ui.end_container();
         }
 
         ui.end();
-        refresh();
 
+        refresh();
         let key = getch();
-        match key as u8 as char {
-            'q' => quit = true,
-            'W' => match focus {
-                Focus::Todo => list_drag_up(&mut todos, &mut todo_curr),
-                Focus::Done => list_drag_up(&mut done, &mut done_curr),
-            },
-            'w' => match focus {
-                Focus::Todo => list_up(&todos, &mut todo_curr),
-                Focus::Done => list_up(&done, &mut done_curr),
-            },
-            'S' => match focus {
-                Focus::Todo => list_drag_down(&mut todos, &mut todo_curr),
-                Focus::Done => list_drag_down(&mut done, &mut done_curr),
-            },
-            's' => match focus {
-                Focus::Todo => list_down(&todos, &mut todo_curr),
-                Focus::Done => list_down(&done, &mut done_curr),
-            },
-            '\n' => match focus {
-                Focus::Todo => list_transfer(&mut done, &mut todos, &mut todo_curr),
-                Focus::Done => list_transfer(&mut todos, &mut done, &mut done_curr),
-            },
-            '\t' => {
-                focus = focus.toggle();
-            }
-            _ => {}
+        if key != ERR {
+            notification.clear();
+            key_curr = Some(key);
         }
     }
     save_state(&todos, &done, &file_path);
