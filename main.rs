@@ -118,7 +118,7 @@ impl UI {
             .add_widget(layout.size)
     }
 
-    fn label(&mut self, text: &str, pair: i16) {
+    fn label_fixed_width(&mut self, text: &str, pair: i16, width: i32) {
         let layout = self
             .containers
             .last_mut()
@@ -126,11 +126,15 @@ impl UI {
 
         let pos = layout.available_pos();
 
-        mv(pos.col as i32, pos.row as i32);
+        mv(pos.col, pos.row);
         attron(COLOR_PAIR(pair));
         addstr(text);
         attroff(COLOR_PAIR(pair));
-        layout.add_widget(Vec2::new(text.len() as i32, 1));
+        layout.add_widget(Vec2::new(width, 1));
+    }
+
+    fn label(&mut self, text: &str, pair: i16) {
+        self.label_fixed_width(text, pair, text.len() as i32)
     }
 
     fn end(&mut self) {
@@ -148,19 +152,19 @@ enum Focus {
 impl Focus {
     fn toggle(&self) -> Self {
         match self {
-            Focus::Todo => return Focus::Done,
-            Focus::Done => return Focus::Todo,
+            Focus::Todo => Focus::Done,
+            Focus::Done => Focus::Todo,
         }
     }
 }
 
-fn list_up(_list: &Vec<String>, list_curr: &mut i32) {
+fn list_up(_list: &[String], list_curr: &mut i32) {
     if *list_curr > 0 {
         *list_curr -= 1;
     }
 }
 
-fn list_down(list: &Vec<String>, list_curr: &mut i32) {
+fn list_down(list: &[String], list_curr: &mut i32) {
     if *list_curr + 1 < list.len() as i32 {
         *list_curr += 1;
     }
@@ -174,18 +178,30 @@ fn list_transfer(list_dest: &mut Vec<String>, list_src: &mut Vec<String>, list_s
 }
 
 fn parse_item(line: &str) -> Option<(Focus, &str)> {
-    let todo_prefix = "TODO: ";
-    let done_prefix = "DONE: ";
-    if line.starts_with(todo_prefix) {
-        return Some((Focus::Todo, &line[todo_prefix.len()..]));
-    }
-    if line.starts_with(done_prefix) {
-        return Some((Focus::Done, &line[done_prefix.len()..]));
-    }
-    todo!();
+    let todo_item = line
+        .strip_prefix("TODO: ")
+        .map(|title| (Focus::Todo, title));
+    let done_item = line
+        .strip_prefix("DONE: ")
+        .map(|title| (Focus::Done, title));
+    todo_item.or(done_item)
 }
 
-fn save_state(todos: &Vec<String>, done: &Vec<String>, file_path: &str) {
+fn list_drag_up(list: &mut [String], list_curr: &mut i32) {
+    if *list_curr > 0 {
+        list.swap(*list_curr as usize, (*list_curr - 1) as usize);
+        *list_curr -= 1;
+    }
+}
+
+fn list_drag_down(list: &mut [String], list_curr: &mut i32) {
+    if *list_curr + 1 < list.len() as i32 {
+        list.swap(*list_curr as usize, (*list_curr + 1) as usize);
+        *list_curr += 1;
+    }
+}
+
+fn save_state(todos: &[String], done: &[String], file_path: &str) {
     let mut file = File::create(file_path).unwrap();
     for todo in todos.iter() {
         writeln!(file, "TODO: {}", todo).unwrap();
@@ -242,25 +258,32 @@ fn main() {
     refresh();
     let mut quit = false;
     let mut focus = Focus::Todo;
+    let mut editing = false;
 
     let mut ui = UI::default();
 
     while !quit {
         erase();
+
+        let mut x = 0;
+        let mut y = 0;
+        getmaxyx(stdscr(), &mut y, &mut x);
+
         ui.begin(Vec2::new(0, 0), ContType::Horz);
         {
             ui.begin_container(ContType::Vert);
             {
-                ui.label("TODO", REGULAR_PAIR);
+                ui.label_fixed_width("TODO", REGULAR_PAIR, x / 2);
                 ui.label("-------------", REGULAR_PAIR);
                 for (index, item) in todos.iter().enumerate() {
-                    ui.label(
+                    ui.label_fixed_width(
                         &format!("- [ ] {}", item),
                         if index == todo_curr as usize && focus == Focus::Todo {
                             HIGHLIGHT_PAIR
                         } else {
                             REGULAR_PAIR
                         },
+                        x / 2,
                     );
                 }
             }
@@ -268,16 +291,17 @@ fn main() {
 
             ui.begin_container(ContType::Vert);
             {
-                ui.label("DONE", REGULAR_PAIR);
+                ui.label_fixed_width("DONE", REGULAR_PAIR, x / 2);
                 ui.label("-------------", REGULAR_PAIR);
                 for (index, item) in done.iter().enumerate() {
-                    ui.label(
+                    ui.label_fixed_width(
                         &format!("- [x] {}", item),
                         if index == done_curr as usize && focus == Focus::Done {
                             HIGHLIGHT_PAIR
                         } else {
                             REGULAR_PAIR
                         },
+                        x / 2,
                     )
                 }
             }
@@ -290,9 +314,17 @@ fn main() {
         let key = getch();
         match key as u8 as char {
             'q' => quit = true,
+            'W' => match focus {
+                Focus::Todo => list_drag_up(&mut todos, &mut todo_curr),
+                Focus::Done => list_drag_up(&mut done, &mut done_curr),
+            },
             'w' => match focus {
                 Focus::Todo => list_up(&todos, &mut todo_curr),
                 Focus::Done => list_up(&done, &mut done_curr),
+            },
+            'S' => match focus {
+                Focus::Todo => list_drag_down(&mut todos, &mut todo_curr),
+                Focus::Done => list_drag_down(&mut done, &mut done_curr),
             },
             's' => match focus {
                 Focus::Todo => list_down(&todos, &mut todo_curr),
