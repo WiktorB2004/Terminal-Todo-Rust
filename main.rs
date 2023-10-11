@@ -401,6 +401,12 @@ fn main() {
                                 'w' => list_up(&todos, &mut todo_curr),
                                 'S' => list_drag_down(&mut todos, &mut todo_curr),
                                 's' => list_down(&todos, &mut todo_curr),
+                                'i' => {
+                                    todos.insert((todo_curr + 1) as usize, String::new());
+                                    editing_cursor = 0;
+                                    editing = true;
+                                    key_curr = None;
+                                }
                                 '\n' => list_transfer(&mut done, &mut todos, &mut todo_curr),
                                 '\t' => {
                                     focus = focus.toggle();
@@ -423,16 +429,32 @@ fn main() {
                 {
                     if focus == Focus::Done {
                         ui.label_fixed_width("DONE", HIGHLIGHT_PAIR, x / 2);
-                        for (index, item) in done.iter().enumerate() {
-                            ui.label_fixed_width(
-                                &format!("- [x] {}", item),
-                                if index == done_curr as usize {
-                                    HIGHLIGHT_PAIR
+                        for (index, item) in done.iter_mut().enumerate() {
+                            if index == done_curr as usize {
+                                if editing {
+                                    ui.edit_item(item, &mut editing_cursor, &mut key_curr, x / 2);
+                                    if let Some('\n') = key_curr.take().map(|x| x as u8 as char) {
+                                        editing = false;
+                                    }
                                 } else {
-                                    REGULAR_PAIR
-                                },
-                                x / 2,
-                            );
+                                    ui.label_fixed_width(
+                                        &format!("- [x] {}", item),
+                                        HIGHLIGHT_PAIR,
+                                        x / 2,
+                                    );
+                                    if let Some('e') = key_curr.map(|x| x as u8 as char) {
+                                        editing = true;
+                                        editing_cursor = item.len();
+                                        key_curr = None;
+                                    }
+                                }
+                            } else {
+                                ui.label_fixed_width(
+                                    &format!("- [x] {}", item),
+                                    REGULAR_PAIR,
+                                    x / 2,
+                                );
+                            }
                         }
                         if let Some(key) = key_curr.take() {
                             match key as u8 as char {
