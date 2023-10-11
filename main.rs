@@ -123,6 +123,7 @@ impl UI {
             .add_widget(layout.size)
     }
 
+    // TODO: UI::edit_item buffer do not scroll after it exceed available space
     fn edit_item(
         &mut self,
         buffer: &mut String,
@@ -137,35 +138,17 @@ impl UI {
 
         let pos = layout.available_pos();
 
-        // BUFFER
         {
-            if let Some(key) = key_current.take() {
-                if (32..127).contains(&key) {
-                    if *cursor >= buffer.len() {
-                        buffer.push(key as u8 as char)
-                    } else {
-                        buffer.insert(*cursor, key as u8 as char)
-                    }
-                    *cursor += 1;
-                } else {
-                    *key_current = Some(key);
-                }
-            }
-
-            mv(pos.col, pos.row);
-            attron(COLOR_PAIR(REGULAR_PAIR));
-            addstr(&buffer);
-            attroff(COLOR_PAIR(REGULAR_PAIR));
-            layout.add_widget(Vec2::new(width, 1));
-        }
-        // CURSOR
-        {
-            if *cursor > buffer.len() {
-                *cursor = buffer.len();
-            }
-
             if let Some(key) = key_current.take() {
                 match key {
+                    32..=126 => {
+                        if *cursor >= buffer.len() {
+                            buffer.push(key as u8 as char)
+                        } else {
+                            buffer.insert(*cursor, key as u8 as char)
+                        }
+                        *cursor += 1;
+                    }
                     constants::KEY_LEFT => {
                         if *cursor > 0 {
                             *cursor -= 1;
@@ -193,6 +176,19 @@ impl UI {
                         *key_current = Some(key);
                     }
                 }
+            }
+
+            // BUFFER
+            mv(pos.col, pos.row);
+            attron(COLOR_PAIR(REGULAR_PAIR));
+            addstr(&buffer);
+            attroff(COLOR_PAIR(REGULAR_PAIR));
+            layout.add_widget(Vec2::new(width, 1));
+        }
+        // CURSOR
+        {
+            if *cursor > buffer.len() {
+                *cursor = buffer.len();
             }
 
             mv(pos.col, pos.row + *cursor as i32);
@@ -364,6 +360,7 @@ fn main() {
             ui.label_fixed_width(&notification, REGULAR_PAIR, x);
             ui.label_fixed_width(" ", REGULAR_PAIR, x);
 
+            // TODO: items do not scroll after exceceding available space
             ui.begin_container(ContType::Horz);
             {
                 ui.begin_container(ContType::Vert);
