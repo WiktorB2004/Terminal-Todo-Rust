@@ -6,8 +6,6 @@ use std::process;
 use std::{cmp, env};
 
 // TODO: Create notifications
-// TODO: Implement adding items
-// TODO: Implement deleting items
 // TODO: Refactor the code
 
 const REGULAR_PAIR: i16 = 0;
@@ -403,6 +401,7 @@ fn main() {
                                 's' => list_down(&todos, &mut todo_curr),
                                 'i' => {
                                     todos.insert((todo_curr + 1) as usize, String::new());
+                                    todo_curr += 1;
                                     editing_cursor = 0;
                                     editing = true;
                                     key_curr = None;
@@ -462,6 +461,9 @@ fn main() {
                                 'w' => list_up(&done, &mut done_curr),
                                 'S' => list_drag_down(&mut done, &mut done_curr),
                                 's' => list_down(&done, &mut done_curr),
+                                'd' => {
+                                    done.remove(done_curr as usize);
+                                }
                                 '\n' => list_transfer(&mut todos, &mut done, &mut done_curr),
                                 '\t' => {
                                     focus = focus.toggle();
