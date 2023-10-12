@@ -400,6 +400,7 @@ fn main() {
                                 'S' => list_drag_down(&mut todos, &mut todo_curr),
                                 's' => list_down(&todos, &mut todo_curr),
                                 'i' => {
+                                    notification.push_str("Insert new todo item");
                                     todos.insert((todo_curr + 1) as usize, String::new());
                                     todo_curr += 1;
                                     editing_cursor = 0;
