@@ -406,8 +406,15 @@ fn main() {
                                     editing = true;
                                     key_curr = None;
                                 }
-                                '\n' => list_transfer(&mut done, &mut todos, &mut todo_curr),
+                                'd' => {
+                                    notification.push_str("You cant delete items from todo list, mark as done and then delete");
+                                }
+                                '\n' => {
+                                    notification.push_str("Markes as done");
+                                    list_transfer(&mut done, &mut todos, &mut todo_curr);
+                                }
                                 '\t' => {
+                                    notification.push_str("Switched to DONE");
                                     focus = focus.toggle();
                                 }
                                 _ => {
@@ -462,10 +469,18 @@ fn main() {
                                 'S' => list_drag_down(&mut done, &mut done_curr),
                                 's' => list_down(&done, &mut done_curr),
                                 'd' => {
+                                    notification.push_str("Item removed");
                                     done.remove(done_curr as usize);
                                 }
-                                '\n' => list_transfer(&mut todos, &mut done, &mut done_curr),
+                                'i' => {
+                                    notification.push_str("You cant insert items to done list, insert to todo and mark as done");
+                                }
+                                '\n' => {
+                                    notification.push_str("Markes as todo");
+                                    list_transfer(&mut todos, &mut done, &mut done_curr);
+                                }
                                 '\t' => {
+                                    notification.push_str("Switched to TODO");
                                     focus = focus.toggle();
                                 }
                                 _ => {
