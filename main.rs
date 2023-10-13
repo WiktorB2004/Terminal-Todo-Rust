@@ -450,9 +450,9 @@ fn main() {
                                         x / 2,
                                     );
                                     if let Some('e') = key_curr.map(|x| x as u8 as char) {
-                                        editing = true;
-                                        editing_cursor = item.len();
-                                        key_curr = None;
+                                        notification.push_str(
+                                            "You cant edit in DONE, move to TODO and then edit",
+                                        );
                                     }
                                 }
                             } else {
