@@ -25,6 +25,7 @@ The application ensures your tasks are saved between sessions, so you can pick u
 Rust was chosen as the programming language for this project due to its emphasis on safety, performance, and reliability. It offers a robust type system that helps prevent common programming errors. Additionally, Rust's cross-platform support ensures that this application can be used on a wide range of operating systems.
 
 ## User Manual
+Run command: `cargo run <file-name>`
 | Key | Action |
 | ------------- | ------------- |
 | <kbd>w</kbd> | focus up  |
