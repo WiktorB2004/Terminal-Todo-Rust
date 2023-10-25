@@ -5,6 +5,7 @@ Project status: Completed (13.10.2023)
 - [x] Create user friendly UI
 - [x] Implement user action handling
 - [x] Implement CRUD for list items
+- [x] Create user notification system
 - [ ] (Optional) Add date to each element
 
 ## About the project
