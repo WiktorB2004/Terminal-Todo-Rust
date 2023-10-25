@@ -1,6 +1,8 @@
-# File Encryption/Decryption with integrated file explorer in Rust (using tsoding videos)
+# Terminal TODO application in Rust (using tsoding videos)
 Project start date: 8.10.2023  
-Project status: Completed (13.10.2023)  
+Project status: Completed (13.10.2023) 
+
+![TODO_RUST](https://github.com/WiktorB2004/Terminal-Todo-Rust/assets/62223421/09e3071e-9654-4753-a861-0dbea08d2d94)
 ## TODO
 - [x] Create user friendly UI
 - [x] Implement user action handling
